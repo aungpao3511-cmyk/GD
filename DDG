@@ -1,0 +1,160 @@
+-- ==========================================
+-- Script Name: Football Hub GUI
+-- Features: Curve Kick, Auto TP Ball, Auto Roll (Gacha), Goalie Hitbox 100
+-- Place in: StarterPlayerScripts or StarterGui
+-- ==========================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Variables & States
+local autoTPBall = false
+local goalieHitbox = false
+local ballName = "Football" -- *** เปลี่ยนเป็นชื่อลูกบอลใน Workspace ของเกมคุณ ***
+
+-- ------------------------------------------
+-- Function 1: เตะบอลปั่นโค้ง (Curve Kick)
+-- ------------------------------------------
+local function curveKickBall()
+	local ball = workspace:FindFirstChild(ballName) or workspace:FindFirstChild("Ball")
+	if ball and ball:IsA("BasePart") then
+		local char = LocalPlayer.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			local hrp = char.HumanoidRootPart
+			-- กำหนดทิศทางพร้อมสร้างแรงเหวี่ยงให้ปั่นโค้งด้วย Velocity
+			local forwardForce = hrp.CFrame.LookVector * 80
+			local curveForce = hrp.CFrame.RightVector * 40 -- แรงปั่นโค้งไปทางขวา
+			
+			local bv = Instance.new("BodyVelocity")
+			bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+			bv.Velocity = forwardForce + curveForce + Vector3.new(0, 25, 0) -- โค้งขึ้นเล็กน้อย
+			bv.Parent = ball
+			
+			-- จำลองการย้อยโค้งกลับ
+			task.spawn(function()
+				for i = 1, 10 do
+					task.wait(0.05)
+					bv.Velocity = bv.Velocity - (hrp.CFrame.RightVector * 8)
+				end
+				bv:Destroy()
+			end)
+		end
+	end
+end
+
+-- ------------------------------------------
+-- Function 2: วาร์ปไปเอาบอลอัตโนมัติ (Auto TP to Ball)
+-- ------------------------------------------
+RunService.RenderStepped:Connect(function()
+	if autoTPBall then
+		local ball = workspace:FindFirstChild(ballName) or workspace:FindFirstChild("Ball")
+		local char = LocalPlayer.Character
+		if ball and char and char:FindFirstChild("HumanoidRootPart") then
+			char.HumanoidRootPart.CFrame = ball.CFrame * CFrame.new(0, 2, 0)
+		end
+	end
+end)
+
+-- ------------------------------------------
+-- Function 3: ระบบสุ่มอัตโนมัติ ( Auto Random / Gacha )
+-- ------------------------------------------
+local function autoRandom()
+	local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+	local coins = leaderstats and (leaderstats:FindFirstChild("Coins") or leaderstats:FindFirstChild("Money"))
+	
+	local cost = 100 -- ราคาสุ่มต่อครั้ง
+	if coins and coins.Value >= cost then
+		coins.Value = coins.Value - cost
+		
+		local items = {"Common Glove", "Rare Boot", "Epic Jersey", "Legendary Ball"}
+		local result = items[math.random(1, #items)]
+		
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "สุ่มสำเร็จ!",
+			Text = "คุณได้รับ: " .. result .. " (เสีย " .. cost .. " Coins)",
+			Duration = 4
+		})
+	else
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "เงินไม่พอ!",
+			Text = "คุณต้องมีเงินอย่างน้อย " .. cost .. " Coins",
+			Duration = 3
+		})
+	end
+end
+
+-- ------------------------------------------
+-- Function 4: Hitbox 100 สำหรับผู้รักษาประตู (Goalie Hitbox)
+-- ------------------------------------------
+RunService.RenderStepped:Connect(function()
+	if goalieHitbox then
+		local char = LocalPlayer.Character
+		if char then
+			for _, part in pairs(char:GetChildren()) do
+				if part:IsA("BasePart") and (part.Name:find("Arm") or part.Name:find("Hand") or part.Name == "HumanoidRootPart") then
+					part.Size = Vector3.new(100, 100, 100)
+					part.Transparency = 0.7
+					part.CanCollide = false
+				end
+			end
+		end
+	end
+end)
+
+-- ------------------------------------------
+-- GUI Interface Build (สร้างหน้าต่างสคริปต์อัตโนมัติ)
+-- ------------------------------------------
+local screenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+screenGui.Name = "FootballScriptUI"
+
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 220, 0, 270)
+frame.Position = UDim2.new(0.05, 0, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.Active = true
+frame.Draggable = true -- สามารถลากหน้าต่าง GUI ได้
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Text = "⚽ Football Hub Script"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+
+local function createButton(text, pos, callback)
+	local btn = Instance.new("TextButton", frame)
+	btn.Size = UDim2.new(0.9, 0, 0, 40)
+	btn.Position = pos
+	btn.Text = text
+	btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.MouseButton1Click:Connect(callback)
+	return btn
+end
+
+-- ปุ่ม Function 1: เตะบอลโค้ง
+createButton("เตะบอลปั่นโค้ง", UDim2.new(0.05, 0, 0.15, 0), function()
+	curveKickBall()
+end)
+
+-- ปุ่ม Function 2: วาร์ปไปเอาบอล (เปิด/ปิด)
+local tpBtn
+tpBtn = createButton("Auto TP Ball: OFF", UDim2.new(0.05, 0, 0.35, 0), function()
+	autoTPBall = not autoTPBall
+	tpBtn.Text = "Auto TP Ball: " .. (autoTPBall and "ON" or "OFF")
+	tpBtn.BackgroundColor3 = autoTPBall and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(60, 60, 60)
+end)
+
+-- ปุ่ม Function 3: สุ่มไอเทม
+createButton("สุ่มไอเทม (100 Coins)", UDim2.new(0.05, 0, 0.55, 0), function()
+	autoRandom()
+end)
+
+-- ปุ่ม Function 4: โกล Hitbox 100 (เปิด/ปิด)
+local hitboxBtn
+hitboxBtn = createButton("Goalie Hitbox 100: OFF", UDim2.new(0.05, 0, 0.75, 0), function()
+	goalieHitbox = not goalieHitbox
+	hitboxBtn.Text = "Goalie Hitbox 100: " .. (goalieHitbox and "ON" or "OFF")
+	hitboxBtn.BackgroundColor3 = goalieHitbox and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(60, 60, 60)
+end)
